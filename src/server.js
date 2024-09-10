@@ -49,12 +49,16 @@ app.get('/profile', (req, res) => {
 app.get('/login', (req, res) => {
   // define constants for the authorization request
   const authorizationEndpoint = oidcProviderInfo['authorization_endpoint'];
-  const responseType = 'id_token';
-  const scope = 'openid email profile address phone';
+  const responseType = 'code'; /* OLD: 'id_token';*/
+  const scope = 'openid email profile address phone read:to-dos';
   const clientID = process.env.CLIENT_ID;
   const redirectUri = 'http://localhost:3000/callback';
-  const responseMode = 'form_post';
+  const responseMode = 'query'; /* OLD: 'form_post';*/
   const nonce = crypto.randomBytes(16).toString('hex');
+
+  // NEW
+  const audience = process.env.API_IDENTIFIER;
+
   // define a signed cookie containing the nonce value
   const options = {
     maxAge: 1000 * 60 * 15,
@@ -78,15 +82,69 @@ app.get('/login', (req, res) => {
         '&redirect_uri=' +
         redirectUri +
         '&nonce=' +
-        nonce
+        nonce +
+        '&audience=' +
+        audience
     );
+});
+
+function validateIDToken(idToken, nonce) {
+  const decodedToken = jwt.decode(idToken);
+  // fetch ID token details
+  const {
+    nonce: decodedNonce,
+    aud: audience,
+    exp: expirationDate,
+    iss: issuer
+  } = decodedToken;
+  const currentTime = Math.floor(Date.now() / 1000);
+  const expectedAudience = process.env.CLIENT_ID;
+
+  // validate ID tokens
+  if (
+    audience !== expectedAudience ||
+    decodedNonce !== nonce ||
+    expirationDate < currentTime ||
+    issuer !== oidcProviderInfo['issuer']
+  )
+    throw Error();
+  // return the decoded token
+  return decodedToken;
+}
+
+app.get('/callback', async (req, res) => {
+  const { code } = req.query;
+  const codeExchangeOptions = {
+    grant_type: 'authorization_code',
+    client_id: process.env.CLIENT_ID,
+    client_secret: process.env.CLIENT_SECRET,
+    code: code,
+    redirect_uri: 'http://localhost:3000/callback'
+  };
+  const codeExchangeResponse = await request.post(
+    `https://${process.env.OIDC_PROVIDER}/oauth/token`,
+    { form: codeExchangeOptions }
+  );
+  // parse response to get tokens
+  const tokens = JSON.parse(codeExchangeResponse);
+  req.session.accessToken = tokens.access_token;
+  // extract nonce from cookie
+  const nonce = req.signedCookies[nonceCookie];
+  delete req.signedCookies[nonceCookie];
+  try {
+    req.session.decodedIdToken = validateIDToken(tokens.id_token, nonce);
+    req.session.idToken = tokens.id_token;
+    res.redirect('/profile');
+  } catch (error) {
+    res.status(401).send();
+  }
 });
 
 // app.post('/callback', async (req, res) => {
 //   res.status(501).send();
 // });
 
-app.post('/callback', async (req, res) => {
+/* OLD: app.post('/callback', async (req, res) => {
   // take nonce from cookie
   const nonce = req.signedCookies[nonceCookie];
   // delete nonce
@@ -101,7 +159,7 @@ app.post('/callback', async (req, res) => {
   const client = jwksClient({
     jwksUri: oidcProviderInfo['jwks_uri']
   });
-  34;
+  
   client.getSigningKey(kid, (err, key) => {
     const signingKey = key.publicKey || key.rsaPublicKey;
     // verify signature & decode token
@@ -126,14 +184,33 @@ app.post('/callback', async (req, res) => {
     }
     req.session.decodedIdToken = verifiedToken;
     req.session.idToken = id_token;
-    35;
+    
     // send the decoded version of the ID Token
     res.redirect('/profile');
   });
-});
+}); */
 
 app.get('/to-dos', async (req, res) => {
-  res.status(501).send();
+  const delegatedRequestOptions = {
+    url: 'http://localhost:3001',
+    /*host: 'localhost',
+        port: 3001,
+        path: '/to-do',
+        method: 'GET',*/
+    headers: {
+      Authorization: `Bearer ${req.session.accessToken}`
+    }
+  };
+  try {
+    console.log('async not done');
+    const delegatedResponse = await request(delegatedRequestOptions);
+    console.log('async done');
+    const toDos = JSON.parse(delegatedResponse);
+    console.log('parse done');
+    res.render('to-dos', { toDos });
+  } catch (error) {
+    res.status(error.statusCode).send(error);
+  }
 });
 
 app.get('/remove-to-do/:id', async (req, res) => {
