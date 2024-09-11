@@ -50,7 +50,8 @@ app.get('/login', (req, res) => {
   // define constants for the authorization request
   const authorizationEndpoint = oidcProviderInfo['authorization_endpoint'];
   const responseType = 'code'; /* OLD: 'id_token';*/
-  const scope = 'openid email profile address phone read:to-dos';
+  const scope =
+    'openid email profile address phone read:to-dos create:to-dos update:to-dos delete:to-dos';
   const clientID = process.env.CLIENT_ID;
   const redirectUri = 'http://localhost:3000/callback';
   const responseMode = 'query'; /* OLD: 'form_post';*/
@@ -192,21 +193,14 @@ app.get('/callback', async (req, res) => {
 
 app.get('/to-dos', async (req, res) => {
   const delegatedRequestOptions = {
-    url: 'http://localhost:3001',
-    /*host: 'localhost',
-        port: 3001,
-        path: '/to-do',
-        method: 'GET',*/
+    url: 'http://127.0.0.1:3001',
     headers: {
       Authorization: `Bearer ${req.session.accessToken}`
     }
   };
   try {
-    console.log('async not done');
     const delegatedResponse = await request(delegatedRequestOptions);
-    console.log('async done');
     const toDos = JSON.parse(delegatedResponse);
-    console.log('parse done');
     res.render('to-dos', { toDos });
   } catch (error) {
     res.status(error.statusCode).send(error);
@@ -214,7 +208,38 @@ app.get('/to-dos', async (req, res) => {
 });
 
 app.get('/remove-to-do/:id', async (req, res) => {
-  res.status(501).send();
+  const delegatedRequestOptions = {
+    url: `http://127.0.0.1:3001/${req.params.id}`,
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${req.session.accessToken}`
+    }
+  };
+  console.log(delegatedRequestOptions);
+  try {
+    const delegatedResponse = await request(delegatedRequestOptions);
+    res.redirect('/to-dos');
+  } catch (error) {
+    res.status(error.statusCode).send(error);
+  }
+});
+
+app.get('/add-to-do', async (req, res) => {
+  const delegatedRequestOptions = {
+    url: `http://127.0.0.1:3001`,
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${req.session.accessToken}`
+    },
+    json: { title: req.query.todo, description: req.query.todo }
+  };
+  console.log(delegatedRequestOptions);
+  try {
+    const delegatedResponse = await request(delegatedRequestOptions);
+    res.redirect('/to-dos');
+  } catch (error) {
+    res.status(error.statusCode).send(error);
+  }
 });
 
 // app.listen(3000, () => {
