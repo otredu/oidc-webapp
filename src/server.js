@@ -42,10 +42,6 @@ app.get('/profile', (req, res) => {
   });
 });
 
-// app.get('/login', (req, res) => {
-//   res.status(501).send();
-// });
-
 app.get('/login', (req, res) => {
   // define constants for the authorization request
   const authorizationEndpoint = oidcProviderInfo['authorization_endpoint'];
@@ -141,56 +137,6 @@ app.get('/callback', async (req, res) => {
   }
 });
 
-// app.post('/callback', async (req, res) => {
-//   res.status(501).send();
-// });
-
-/* OLD: app.post('/callback', async (req, res) => {
-  // take nonce from cookie
-  const nonce = req.signedCookies[nonceCookie];
-  // delete nonce
-  delete req.signedCookies[nonceCookie];
-  // take ID Token posted by the user
-  const { id_token } = req.body;
-  // decode token
-  const decodedToken = jwt.decode(id_token, { complete: true });
-  // get key id
-  const kid = decodedToken.header.kid;
-  // get public key
-  const client = jwksClient({
-    jwksUri: oidcProviderInfo['jwks_uri']
-  });
-  
-  client.getSigningKey(kid, (err, key) => {
-    const signingKey = key.publicKey || key.rsaPublicKey;
-    // verify signature & decode token
-    const verifiedToken = jwt.verify(id_token, signingKey);
-    // check audience, nonce, and expiration time
-    const {
-      nonce: decodedNonce,
-      aud: audience,
-      exp: expirationDate,
-      iss: issuer
-    } = verifiedToken;
-    const currentTime = Math.floor(Date.now() / 1000);
-    const expectedAudience = process.env.CLIENT_ID;
-    if (
-      audience !== expectedAudience ||
-      decodedNonce !== nonce ||
-      expirationDate < currentTime ||
-      issuer !== oidcProviderInfo['issuer']
-    ) {
-      // send an unauthorized http status
-      return res.status(401).send();
-    }
-    req.session.decodedIdToken = verifiedToken;
-    req.session.idToken = id_token;
-    
-    // send the decoded version of the ID Token
-    res.redirect('/profile');
-  });
-}); */
-
 app.get('/to-dos', async (req, res) => {
   const delegatedRequestOptions = {
     url: 'http://127.0.0.1:3001',
@@ -242,9 +188,6 @@ app.get('/add-to-do', async (req, res) => {
   }
 });
 
-// app.listen(3000, () => {
-//   console.log(`Server running on http://localhost:3000`);
-// });
 const OIDC_PROVIDER = process.env.OIDC_PROVIDER;
 console.log(OIDC_PROVIDER);
 
